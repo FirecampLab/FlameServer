@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+<head>
+    <title>Socket.IO + Express.js - Modifier demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font: 13px Helvetica, Arial;
+        }
+
+        form {
+            padding: 3px;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+
+        form input {
+            border: 1px solid #c5bfbf;
+            padding: 10px;
+            width: 40%;
+        }
+
+        form button {
+            width: 9%;
+            background: rgb(130, 224, 255);
+            border: none;
+            padding: 10px;
+            margin-left: 3px
+        }
+
+        #messages {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            float: left;
+            width: 50%
+        }
+
+        #messages li {
+            padding: 5px 10px;
+        }
+
+        #messages li:nth-child(odd) {
+            background: #eee;
+        }
+
+        #online {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            float: right;
+            width: 20%;
+            background: #eee;
+            height: -webkit-fill-available;
+            border-bottom: 1px solid grey
+        }
+
+        #online li {
+            right: 5px;
+            display: block;
+            padding: 3px;
+            border-bottom: 1px solid white;
+        }
+    </style>
+</head>
+<body>
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script>
+    let converBase64toBlob = (content, contentType) => {
+        contentType = contentType || '';
+        let sliceSize = 512;
+        let byteCharacters = window.atob(content); //method which converts base64 to binary
+        let byteArrays = [];
+        for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+            let slice = byteCharacters.slice(offset, offset + sliceSize);
+            let byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+            }
+            let byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+        }
+        let blob = new Blob(byteArrays, {
+            type: contentType
+        }); //statement which creates the blob
+        return blob;
+    }
+
+    function emitBase64(file, name) {
+        var reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = function () {
+            let result = reader.result.split(';base64,')
+            socket.emit('receivingFile', {type: result[0].replace('data:', ''), data: result[1], name });
+        };
+        reader.onerror = function (error) {
+            console.log('Error: ', error);
+        };
+    }
+
+    const socket = io('http://' + window.location.hostname + ':4002');
+    socket.on('connect', () => {
+        let filename
+        socket.on('message', (...model) => {
+
+            let {data, type, name} = model[0]
+
+            if (!type) {
+                $('#messages').append($('<li>').text([...model]));
+            }
+            else if (type == "img") {
+                $('#messages').append($('<img>').attr("src", data));
+            }
+            else {
+                console.log([...model])
+                let blob = converBase64toBlob(data, type)
+                let blobURL = URL.createObjectURL(blob);
+                // window.open(blobURL);
+                $('#messages').append($('<li>').append($('<p>').text("Recieved a file. ").append($('<span>').text(name).css({'font-weight':'bold'}))).append($('<a>').text("Click to view").attr("href", blobURL).attr("target", "_blank").attr("download",name)));
+            }
+        });
+
+        $(() => {
+
+            $('form').submit(() => {
+                let message = $('#m').val()
+                socket.emit(message);
+                $('#m').val('');
+                return false;
+            });
+            $('#toggle').click(() => {
+                let files = $('#file')[0].files
+                   filename = files[0].name;
+
+                if (files.length > 0) {
+                    emitBase64(files[0], filename)
+                }
+                return false;
+            });
+        });
+    });
+
+</script>
+<ul id="messages"></ul>
+<form action="">
+    <input id="m" placeholder="enter message here" autocomplete="off"/>
+    <button id="submit">Send</button>
+    <input id="file" type="file"/>
+    <button id="toggle" type="button" style="bottom: 0;">Send File</button>
+</form>
+</body>
+</html>
